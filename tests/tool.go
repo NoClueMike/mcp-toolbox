@@ -2777,8 +2777,29 @@ func RunPostgresListRolesTest(t *testing.T, ctx context.Context, pool *pgxpool.P
 	}
 }
 
+// ToolExecConfig holds the configuration for executing prebuilt tool tests.
+type ToolExecConfig struct {
+	IsMCP bool
+}
+
+// ToolExecOption is a functional option used to configure a ToolExecConfig.
+type ToolExecOption func(*ToolExecConfig)
+
+// WithMCPExec flags the test harness to route the request through the local MCP server
+// instead of the Native Toolbox REST API.
+func WithMCPExec() ToolExecOption {
+	return func(c *ToolExecConfig) {
+		c.IsMCP = true
+	}
+}
+
 // RunMySQLListTablesTest run tests against the mysql-list-tables tool
-func RunMySQLListTablesTest(t *testing.T, databaseName, tableNameParam, tableNameAuth, expectedOwner string) {
+func RunMySQLListTablesTest(t *testing.T, databaseName, tableNameParam, tableNameAuth, expectedOwner string, opts ...ToolExecOption) {
+	config := &ToolExecConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
 	var ownerWant any
 	if expectedOwner == "" {
 		ownerWant = nil
@@ -2891,25 +2912,57 @@ func RunMySQLListTablesTest(t *testing.T, databaseName, tableNameParam, tableNam
 	}
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			const api = "http://127.0.0.1:5000/api/tool/list_tables/invoke"
-			resp, body := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
-			if resp.StatusCode != tc.wantStatusCode {
-				t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(body))
-			}
-			if tc.wantStatusCode != http.StatusOK {
-				return
-			}
-
-			var bodyWrapper struct {
-				Result json.RawMessage `json:"result"`
-			}
-			if err := json.Unmarshal(body, &bodyWrapper); err != nil {
-				t.Fatalf("error decoding response wrapper: %v", err)
-			}
-
 			var resultString string
-			if err := json.Unmarshal(bodyWrapper.Result, &resultString); err != nil {
-				resultString = string(bodyWrapper.Result)
+
+			if config.IsMCP {
+				reqBytes, _ := io.ReadAll(tc.requestBody)
+				var args map[string]any
+				if len(reqBytes) > 0 {
+					_ = json.Unmarshal(reqBytes, &args)
+				}
+				if args == nil {
+					args = make(map[string]any)
+				}
+
+				statusCode, mcpResp, _ := InvokeMCPTool(t, "list_tables", args, nil)
+				if statusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d", statusCode, tc.wantStatusCode)
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
+
+				var blocks []string
+				for _, content := range mcpResp.Result.Content {
+					if content.Type == "text" {
+						blocks = append(blocks, strings.TrimSpace(content.Text))
+					}
+				}
+				if len(blocks) == 0 {
+					resultString = "null"
+				} else {
+					resultString = "[" + strings.Join(blocks, ",") + "]"
+				}
+			} else {
+				const api = "http://127.0.0.1:5000/api/tool/list_tables/invoke"
+				resp, body := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
+				if resp.StatusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(body))
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
+
+				var bodyWrapper struct {
+					Result json.RawMessage `json:"result"`
+				}
+				if err := json.Unmarshal(body, &bodyWrapper); err != nil {
+					t.Fatalf("error decoding response wrapper: %v", err)
+				}
+
+				if err := json.Unmarshal(bodyWrapper.Result, &resultString); err != nil {
+					resultString = string(bodyWrapper.Result)
+				}
 			}
 
 			var got any
@@ -2970,7 +3023,12 @@ func RunMySQLListTablesTest(t *testing.T, databaseName, tableNameParam, tableNam
 }
 
 // RunMySQLListActiveQueriesTest run tests against the mysql-list-active-queries tests
-func RunMySQLListActiveQueriesTest(t *testing.T, ctx context.Context, pool *sql.DB) {
+func RunMySQLListActiveQueriesTest(t *testing.T, ctx context.Context, pool *sql.DB, opts ...ToolExecOption) {
+	config := &ToolExecConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
 	type queryListDetails struct {
 		ProcessId       any    `json:"process_id"`
 		Query           string `json:"query"`
@@ -3068,25 +3126,57 @@ func RunMySQLListActiveQueriesTest(t *testing.T, ctx context.Context, pool *sql.
 				time.Sleep(time.Duration(tc.waitSecsBeforeCheck) * time.Second)
 			}
 
-			const api = "http://127.0.0.1:5000/api/tool/list_active_queries/invoke"
-			resp, respBody := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
-			if resp.StatusCode != tc.wantStatusCode {
-				t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(respBody))
-			}
-			if tc.wantStatusCode != http.StatusOK {
-				return
-			}
-
-			var bodyWrapper struct {
-				Result json.RawMessage `json:"result"`
-			}
-			if err := json.Unmarshal(respBody, &bodyWrapper); err != nil {
-				t.Fatalf("error decoding response wrapper: %v", err)
-			}
-
 			var resultString string
-			if err := json.Unmarshal(bodyWrapper.Result, &resultString); err != nil {
-				resultString = string(bodyWrapper.Result)
+
+			if config.IsMCP {
+				reqBytes, _ := io.ReadAll(tc.requestBody)
+				var args map[string]any
+				if len(reqBytes) > 0 {
+					_ = json.Unmarshal(reqBytes, &args)
+				}
+				if args == nil {
+					args = make(map[string]any)
+				}
+
+				statusCode, mcpResp, _ := InvokeMCPTool(t, "list_active_queries", args, nil)
+				if statusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d", statusCode, tc.wantStatusCode)
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
+
+				var blocks []string
+				for _, content := range mcpResp.Result.Content {
+					if content.Type == "text" {
+						blocks = append(blocks, strings.TrimSpace(content.Text))
+					}
+				}
+				if len(blocks) == 0 {
+					resultString = "null"
+				} else {
+					resultString = "[" + strings.Join(blocks, ",") + "]"
+				}
+			} else {
+				const api = "http://127.0.0.1:5000/api/tool/list_active_queries/invoke"
+				resp, respBody := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
+				if resp.StatusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(respBody))
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
+
+				var bodyWrapper struct {
+					Result json.RawMessage `json:"result"`
+				}
+				if err := json.Unmarshal(respBody, &bodyWrapper); err != nil {
+					t.Fatalf("error decoding response wrapper: %v", err)
+				}
+
+				if err := json.Unmarshal(bodyWrapper.Result, &resultString); err != nil {
+					resultString = string(bodyWrapper.Result)
+				}
 			}
 
 			var got any
@@ -3106,7 +3196,12 @@ func RunMySQLListActiveQueriesTest(t *testing.T, ctx context.Context, pool *sql.
 	wg.Wait()
 }
 
-func RunMySQLListTablesMissingUniqueIndexes(t *testing.T, ctx context.Context, pool *sql.DB, databaseName string) {
+func RunMySQLListTablesMissingUniqueIndexes(t *testing.T, ctx context.Context, pool *sql.DB, databaseName string, opts ...ToolExecOption) {
+	config := &ToolExecConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
 	type listDetails struct {
 		TableSchema string `json:"table_schema"`
 		TableName   string `json:"table_name"`
@@ -3289,25 +3384,57 @@ func RunMySQLListTablesMissingUniqueIndexes(t *testing.T, ctx context.Context, p
 				cleanups = append(cleanups, cleanup)
 			}
 
-			const api = "http://127.0.0.1:5000/api/tool/list_tables_missing_unique_indexes/invoke"
-			resp, respBody := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
-			if resp.StatusCode != tc.wantStatusCode {
-				t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(respBody))
-			}
-			if tc.wantStatusCode != http.StatusOK {
-				return
-			}
-
-			var bodyWrapper struct {
-				Result json.RawMessage `json:"result"`
-			}
-			if err := json.Unmarshal(respBody, &bodyWrapper); err != nil {
-				t.Fatalf("error decoding response wrapper: %v", err)
-			}
-
 			var resultString string
-			if err := json.Unmarshal(bodyWrapper.Result, &resultString); err != nil {
-				resultString = string(bodyWrapper.Result)
+
+			if config.IsMCP {
+				reqBytes, _ := io.ReadAll(tc.requestBody)
+				var args map[string]any
+				if len(reqBytes) > 0 {
+					_ = json.Unmarshal(reqBytes, &args)
+				}
+				if args == nil {
+					args = make(map[string]any)
+				}
+
+				statusCode, mcpResp, _ := InvokeMCPTool(t, "list_tables_missing_unique_indexes", args, nil)
+				if statusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d", statusCode, tc.wantStatusCode)
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
+
+				var blocks []string
+				for _, content := range mcpResp.Result.Content {
+					if content.Type == "text" {
+						blocks = append(blocks, strings.TrimSpace(content.Text))
+					}
+				}
+				if len(blocks) == 0 {
+					resultString = "null"
+				} else {
+					resultString = "[" + strings.Join(blocks, ",") + "]"
+				}
+			} else {
+				const api = "http://127.0.0.1:5000/api/tool/list_tables_missing_unique_indexes/invoke"
+				resp, respBody := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
+				if resp.StatusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(respBody))
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
+
+				var bodyWrapper struct {
+					Result json.RawMessage `json:"result"`
+				}
+				if err := json.Unmarshal(respBody, &bodyWrapper); err != nil {
+					t.Fatalf("error decoding response wrapper: %v", err)
+				}
+
+				if err := json.Unmarshal(bodyWrapper.Result, &resultString); err != nil {
+					resultString = string(bodyWrapper.Result)
+				}
 			}
 
 			var got any
@@ -3326,7 +3453,12 @@ func RunMySQLListTablesMissingUniqueIndexes(t *testing.T, ctx context.Context, p
 	}
 }
 
-func RunMySQLListTableFragmentationTest(t *testing.T, databaseName, tableNameParam, tableNameAuth string) {
+func RunMySQLListTableFragmentationTest(t *testing.T, databaseName, tableNameParam, tableNameAuth string, opts ...ToolExecOption) {
+	config := &ToolExecConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
 	type tableFragmentationDetails struct {
 		TableSchema             string `json:"table_schema"`
 		TableName               string `json:"table_name"`
@@ -3404,25 +3536,57 @@ func RunMySQLListTableFragmentationTest(t *testing.T, databaseName, tableNamePar
 	}
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			const api = "http://127.0.0.1:5000/api/tool/list_table_fragmentation/invoke"
-			resp, respBody := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
-			if resp.StatusCode != tc.wantStatusCode {
-				t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(respBody))
-			}
-			if tc.wantStatusCode != http.StatusOK {
-				return
-			}
-
-			var bodyWrapper struct {
-				Result json.RawMessage `json:"result"`
-			}
-			if err := json.Unmarshal(respBody, &bodyWrapper); err != nil {
-				t.Fatalf("error decoding response wrapper: %v", err)
-			}
-
 			var resultString string
-			if err := json.Unmarshal(bodyWrapper.Result, &resultString); err != nil {
-				resultString = string(bodyWrapper.Result)
+
+			if config.IsMCP {
+				reqBytes, _ := io.ReadAll(tc.requestBody)
+				var args map[string]any
+				if len(reqBytes) > 0 {
+					_ = json.Unmarshal(reqBytes, &args)
+				}
+				if args == nil {
+					args = make(map[string]any)
+				}
+
+				statusCode, mcpResp, _ := InvokeMCPTool(t, "list_table_fragmentation", args, nil)
+				if statusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d", statusCode, tc.wantStatusCode)
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
+
+				var blocks []string
+				for _, content := range mcpResp.Result.Content {
+					if content.Type == "text" {
+						blocks = append(blocks, strings.TrimSpace(content.Text))
+					}
+				}
+				if len(blocks) == 0 {
+					resultString = "null"
+				} else {
+					resultString = "[" + strings.Join(blocks, ",") + "]"
+				}
+			} else {
+				const api = "http://127.0.0.1:5000/api/tool/list_table_fragmentation/invoke"
+				resp, respBody := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
+				if resp.StatusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(respBody))
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
+
+				var bodyWrapper struct {
+					Result json.RawMessage `json:"result"`
+				}
+				if err := json.Unmarshal(respBody, &bodyWrapper); err != nil {
+					t.Fatalf("error decoding response wrapper: %v", err)
+				}
+
+				if err := json.Unmarshal(bodyWrapper.Result, &resultString); err != nil {
+					resultString = string(bodyWrapper.Result)
+				}
 			}
 
 			var got any
@@ -3441,7 +3605,12 @@ func RunMySQLListTableFragmentationTest(t *testing.T, databaseName, tableNamePar
 	}
 }
 
-func RunMySQLGetQueryPlanTest(t *testing.T, ctx context.Context, pool *sql.DB, databaseName, tableNameParam string) {
+func RunMySQLGetQueryPlanTest(t *testing.T, ctx context.Context, pool *sql.DB, databaseName, tableNameParam string, opts ...ToolExecOption) {
+	config := &ToolExecConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
 	// Create a simple query to explain
 	query := fmt.Sprintf("SELECT * FROM %s", tableNameParam)
 
@@ -3475,175 +3644,47 @@ func RunMySQLGetQueryPlanTest(t *testing.T, ctx context.Context, pool *sql.DB, d
 
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-			const api = "http://127.0.0.1:5000/api/tool/get_query_plan/invoke"
-			resp, respBytes := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
-			if resp.StatusCode != tc.wantStatusCode {
-				t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(respBytes))
-			}
-			if tc.wantStatusCode != http.StatusOK {
-				return
-			}
-
-			var bodyWrapper map[string]json.RawMessage
-
-			if err := json.Unmarshal(respBytes, &bodyWrapper); err != nil {
-				t.Fatalf("error parsing response wrapper: %s, body: %s", err, string(respBytes))
-			}
-
-			resultJSON, ok := bodyWrapper["result"]
-			if !ok {
-				t.Fatal("unable to find 'result' in response body")
-			}
-
 			var resultString string
-			if err := json.Unmarshal(resultJSON, &resultString); err != nil {
-				if string(resultJSON) == "null" {
+
+			if config.IsMCP {
+				reqBytes, _ := io.ReadAll(tc.requestBody)
+				var args map[string]any
+				if len(reqBytes) > 0 {
+					_ = json.Unmarshal(reqBytes, &args)
+				}
+				if args == nil {
+					args = make(map[string]any)
+				}
+
+				statusCode, mcpResp, _ := InvokeMCPTool(t, "get_query_plan", args, nil)
+				if statusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d", statusCode, tc.wantStatusCode)
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
+
+				var blocks []string
+				for _, content := range mcpResp.Result.Content {
+					if content.Type == "text" {
+						blocks = append(blocks, content.Text)
+					}
+				}
+				if len(blocks) == 0 {
 					resultString = "null"
 				} else {
-					t.Fatalf("'result' is not a JSON-encoded string: %s", err)
+					resultString = strings.Join(blocks, "")
 				}
-			}
+			} else {
+				const api = "http://127.0.0.1:5000/api/tool/get_query_plan/invoke"
+				resp, respBytes := RunRequest(t, http.MethodPost, api, tc.requestBody, nil)
+				if resp.StatusCode != tc.wantStatusCode {
+					t.Fatalf("wrong status code: got %d, want %d, body: %s", resp.StatusCode, tc.wantStatusCode, string(respBytes))
+				}
+				if tc.wantStatusCode != http.StatusOK {
+					return
+				}
 
-			var got map[string]any
-			if err := json.Unmarshal([]byte(resultString), &got); err != nil {
-				t.Fatalf("failed to unmarshal actual result string: %v", err)
-			}
-
-			if tc.checkResult != nil {
-				tc.checkResult(t, got)
-			}
-		})
-	}
-}
-
-// RunMSSQLListTablesTest run tests againsts the mssql-list-tables tools.
-func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string) {
-	// TableNameParam columns to construct want.
-	const paramTableColumns = `[
-        {"column_name": "id", "data_type": "INT", "column_ordinal_position": 1, "is_not_nullable": true},
-        {"column_name": "name", "data_type": "VARCHAR(255)", "column_ordinal_position": 2, "is_not_nullable": false}
-    ]`
-
-	// TableNameAuth columns to construct want
-	const authTableColumns = `[
-		{"column_name": "id", "data_type": "INT", "column_ordinal_position": 1, "is_not_nullable": true},
-		{"column_name": "name", "data_type": "VARCHAR(255)", "column_ordinal_position": 2, "is_not_nullable": false},
-		{"column_name": "email", "data_type": "VARCHAR(255)", "column_ordinal_position": 3, "is_not_nullable": false}
-    ]`
-
-	const (
-		// Template to construct detailed output want.
-		detailedObjectTemplate = `{
-            "schema_name": "dbo",
-            "object_name": "%[1]s",
-            "object_details": {
-                "owner": "dbo",
-                "triggers": [],
-                "columns": %[2]s,
-                "object_name": "%[1]s",
-                "object_type": "TABLE",
-                "schema_name": "dbo"
-            }
-        }`
-
-		// Template to construct simple output want
-		simpleObjectTemplate = `{"object_name":"%s", "schema_name":"dbo", "object_details":{"name":"%s"}}`
-	)
-
-	// Helper to build json for detailed want
-	getDetailedWant := func(tableName, columnJSON string) string {
-		return fmt.Sprintf(detailedObjectTemplate, tableName, columnJSON)
-	}
-
-	// Helper to build template for simple want
-	getSimpleWant := func(tableName string) string {
-		return fmt.Sprintf(simpleObjectTemplate, tableName, tableName)
-	}
-
-	invokeTcs := []struct {
-		name           string
-		api            string
-		requestBody    string
-		wantStatusCode int
-		want           string
-		isAllTables    bool
-		isAgentErr     bool
-	}{
-		{
-			name:           "invoke list_tables for all tables detailed output",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": ""}`,
-			wantStatusCode: http.StatusOK,
-			want:           fmt.Sprintf("[%s,%s]", getDetailedWant(tableNameAuth, authTableColumns), getDetailedWant(tableNameParam, paramTableColumns)),
-			isAllTables:    true,
-		},
-		{
-			name:           "invoke list_tables for all tables simple output",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": "", "output_format": "simple"}`,
-			wantStatusCode: http.StatusOK,
-			want:           fmt.Sprintf("[%s,%s]", getSimpleWant(tableNameAuth), getSimpleWant(tableNameParam)),
-			isAllTables:    true,
-		},
-		{
-			name:           "invoke list_tables detailed output",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    fmt.Sprintf(`{"table_names": "%s"}`, tableNameAuth),
-			wantStatusCode: http.StatusOK,
-			want:           fmt.Sprintf("[%s]", getDetailedWant(tableNameAuth, authTableColumns)),
-		},
-		{
-			name:           "invoke list_tables simple output",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    fmt.Sprintf(`{"table_names": "%s", "output_format": "simple"}`, tableNameAuth),
-			wantStatusCode: http.StatusOK,
-			want:           fmt.Sprintf("[%s]", getSimpleWant(tableNameAuth)),
-		},
-		{
-			name:           "invoke list_tables with invalid output format",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": "", "output_format": "abcd"}`,
-			wantStatusCode: http.StatusOK,
-			isAgentErr:     true,
-		},
-		{
-			name:           "invoke list_tables with malformed table_names parameter",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": 12345, "output_format": "detailed"}`,
-			wantStatusCode: http.StatusOK,
-			isAgentErr:     true,
-		},
-		{
-			name:           "invoke list_tables with multiple table names",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    fmt.Sprintf(`{"table_names": "%s,%s"}`, tableNameParam, tableNameAuth),
-			wantStatusCode: http.StatusOK,
-			want:           fmt.Sprintf("[%s,%s]", getDetailedWant(tableNameAuth, authTableColumns), getDetailedWant(tableNameParam, paramTableColumns)),
-		},
-		{
-			name:           "invoke list_tables with non-existent table",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": "non_existent_table"}`,
-			wantStatusCode: http.StatusOK,
-			want:           `[]`,
-		},
-		{
-			name:           "invoke list_tables with one existing and one non-existent table",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    fmt.Sprintf(`{"table_names": "%s,non_existent_table"}`, tableNameParam),
-			wantStatusCode: http.StatusOK,
-			want:           fmt.Sprintf("[%s]", getDetailedWant(tableNameParam, paramTableColumns)),
-		},
-	}
-	for _, tc := range invokeTcs {
-		t.Run(tc.name, func(t *testing.T) {
-			resp, respBytes := RunRequest(t, http.MethodPost, tc.api, bytes.NewBuffer([]byte(tc.requestBody)), nil)
-
-			if resp.StatusCode != tc.wantStatusCode {
-				t.Fatalf("response status code is not %d, got %d: %s", tc.wantStatusCode, resp.StatusCode, string(respBytes))
-			}
-
-			if tc.wantStatusCode == http.StatusOK {
 				var bodyWrapper map[string]json.RawMessage
 
 				if err := json.Unmarshal(respBytes, &bodyWrapper); err != nil {
@@ -3655,12 +3696,6 @@ func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string) 
 					t.Fatal("unable to find 'result' in response body")
 				}
 
-				var resultString string
-
-				if tc.isAgentErr {
-					return
-				}
-
 				if err := json.Unmarshal(resultJSON, &resultString); err != nil {
 					if string(resultJSON) == "null" {
 						resultString = "null"
@@ -3668,64 +3703,15 @@ func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string) 
 						t.Fatalf("'result' is not a JSON-encoded string: %s", err)
 					}
 				}
+			}
 
-				var got, want []any
+			var got map[string]any
+			if err := json.Unmarshal([]byte(resultString), &got); err != nil {
+				t.Fatalf("failed to unmarshal actual result string: %v", err)
+			}
 
-				if err := json.Unmarshal([]byte(resultString), &got); err != nil {
-					t.Fatalf("failed to unmarshal actual result string: %v", err)
-				}
-				if err := json.Unmarshal([]byte(tc.want), &want); err != nil {
-					t.Fatalf("failed to unmarshal expected want string: %v", err)
-				}
-
-				for _, item := range got {
-					itemMap, ok := item.(map[string]any)
-					if !ok {
-						continue
-					}
-
-					detailsStr, ok := itemMap["object_details"].(string)
-					if !ok {
-						continue
-					}
-
-					var detailsMap map[string]any
-					if err := json.Unmarshal([]byte(detailsStr), &detailsMap); err != nil {
-						t.Fatalf("failed to unmarshal nested object_details string: %v", err)
-					}
-
-					// clean unpredictable fields
-					delete(detailsMap, "constraints")
-					delete(detailsMap, "indexes")
-
-					itemMap["object_details"] = detailsMap
-				}
-
-				// Checking only the default dbo schema where the test tables are created to avoid brittle tests.
-				if tc.isAllTables {
-					var filteredGot []any
-					for _, item := range got {
-						if tableMap, ok := item.(map[string]interface{}); ok {
-							if schema, ok := tableMap["schema_name"]; ok && schema == "dbo" {
-								filteredGot = append(filteredGot, item)
-							}
-						}
-					}
-					got = filteredGot
-				}
-
-				sort.SliceStable(got, func(i, j int) bool {
-					return fmt.Sprintf("%v", got[i]) < fmt.Sprintf("%v", got[j])
-				})
-				sort.SliceStable(want, func(i, j int) bool {
-					return fmt.Sprintf("%v", want[i]) < fmt.Sprintf("%v", want[j])
-				})
-
-				if !reflect.DeepEqual(got, want) {
-					gotJSON, _ := json.MarshalIndent(got, "", "  ")
-					wantJSON, _ := json.MarshalIndent(want, "", "  ")
-					t.Errorf("Unexpected result:\ngot:\n%s\n\nwant:\n%s", string(gotJSON), string(wantJSON))
-				}
+			if tc.checkResult != nil {
+				tc.checkResult(t, got)
 			}
 		})
 	}
