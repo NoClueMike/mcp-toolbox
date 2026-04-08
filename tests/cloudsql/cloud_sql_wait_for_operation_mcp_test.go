@@ -17,7 +17,6 @@ package cloudsql
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -28,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/googleapis/genai-toolbox/internal/testutils"
 	"github.com/googleapis/genai-toolbox/tests"
 
@@ -147,7 +145,6 @@ func getCloudSQLWaitToolsConfig() map[string]any {
 		},
 	}
 }
-
 
 func TestCloudSQLWaitToolMCP(t *testing.T) {
 	h := &cloudsqlHandler{

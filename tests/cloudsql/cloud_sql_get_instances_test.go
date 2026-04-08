@@ -25,15 +25,12 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
-	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
 	"github.com/googleapis/mcp-toolbox/tests"
 )
-
 
 func TestGetInstancesToolEndpoints(t *testing.T) {
 	h := &handler{
@@ -169,4 +166,3 @@ func TestGetInstancesToolEndpoints(t *testing.T) {
 		})
 	}
 }
-

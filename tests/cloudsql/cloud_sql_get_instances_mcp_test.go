@@ -33,7 +33,6 @@ import (
 	_ "github.com/googleapis/genai-toolbox/internal/tools/cloudsql/cloudsqlgetinstances"
 )
 
-
 var (
 	getInstancesToolType = "cloud-sql-get-instance"
 )

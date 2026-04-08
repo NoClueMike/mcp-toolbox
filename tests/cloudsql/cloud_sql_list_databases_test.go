@@ -33,7 +33,6 @@ import (
 	"github.com/googleapis/mcp-toolbox/tests"
 )
 
-
 func TestListDatabasesToolEndpoints(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -160,4 +159,3 @@ func TestListDatabasesToolEndpoints(t *testing.T) {
 		})
 	}
 }
-

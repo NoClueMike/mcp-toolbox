@@ -25,8 +25,6 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
-	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -35,7 +33,6 @@ import (
 
 	_ "github.com/googleapis/mcp-toolbox/internal/tools/cloudsql/cloudsqlwaitforoperation"
 )
-
 
 func TestCloudSQLWaitToolEndpoints(t *testing.T) {
 	h := &cloudsqlHandler{
@@ -201,4 +198,3 @@ func TestCloudSQLWaitToolEndpoints(t *testing.T) {
 		})
 	}
 }
-

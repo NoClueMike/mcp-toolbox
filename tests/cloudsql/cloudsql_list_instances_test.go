@@ -34,7 +34,6 @@ import (
 	"github.com/googleapis/mcp-toolbox/tests"
 )
 
-
 func TestListInstance(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.UserAgent(), "genai-toolbox/") {
@@ -154,4 +153,3 @@ func TestListInstance(t *testing.T) {
 		})
 	}
 }
-

@@ -25,15 +25,12 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/googleapis/mcp-toolbox/internal/testutils"
 	"github.com/googleapis/mcp-toolbox/tests"
 )
-
 
 func TestCreateDatabaseToolEndpoints(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -147,4 +144,3 @@ func TestCreateDatabaseToolEndpoints(t *testing.T) {
 		})
 	}
 }
-
