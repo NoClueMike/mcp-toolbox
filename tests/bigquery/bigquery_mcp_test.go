@@ -15,20 +15,17 @@
 package bigquery
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"reflect"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/googleapis/genai-toolbox/internal/sources"
 	"github.com/googleapis/genai-toolbox/internal/testutils"
 	"github.com/googleapis/genai-toolbox/tests"
 )
@@ -152,6 +149,9 @@ func getMcpRunner(t *testing.T) TestRunner {
 
 func invokeMCPToolForTest(t *testing.T, info ToolTestInfo) (string, bool) {
 	parts := strings.Split(info.Api, "/")
+	if len(parts) < 2 {
+		t.Fatalf("invalid API URL: %s", info.Api)
+	}
 	toolName := parts[len(parts)-2]
 
 	var args map[string]any
