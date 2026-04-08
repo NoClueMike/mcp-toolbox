@@ -83,7 +83,7 @@ func getAlloyDBDialOpts(ipType string) ([]alloydbconn.DialOption, error) {
 	}
 }
 
-func initAlloyDBPgConnectionPool(project, region, cluster, instance, ipType, user, pass, dbname string) (*pgxpool.Pool, error) {
+func initAlloyDBPgConnectionPool(ctx context.Context, project, region, cluster, instance, ipType, user, pass, dbname string) (*pgxpool.Pool, error) {
 	dsn := fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", user, pass, dbname)
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -94,7 +94,7 @@ func initAlloyDBPgConnectionPool(project, region, cluster, instance, ipType, use
 	if err != nil {
 		return nil, err
 	}
-	d, err := alloydbconn.NewDialer(context.Background(), alloydbconn.WithDefaultDialOptions(dialOpts...))
+	d, err := alloydbconn.NewDialer(ctx, alloydbconn.WithDefaultDialOptions(dialOpts...))
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse connection uri: %w", err)
 	}
@@ -104,7 +104,7 @@ func initAlloyDBPgConnectionPool(project, region, cluster, instance, ipType, use
 		return d.Dial(ctx, i)
 	}
 
-	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func TestAlloyDBPgCallTool(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	pool, err := initAlloyDBPgConnectionPool(AlloyDBPostgresProject, AlloyDBPostgresRegion, AlloyDBPostgresCluster, AlloyDBPostgresInstance, "public", AlloyDBPostgresUser, AlloyDBPostgresPass, AlloyDBPostgresDatabase)
+	pool, err := initAlloyDBPgConnectionPool(ctx, AlloyDBPostgresProject, AlloyDBPostgresRegion, AlloyDBPostgresCluster, AlloyDBPostgresInstance, "public", AlloyDBPostgresUser, AlloyDBPostgresPass, AlloyDBPostgresDatabase)
 	if err != nil {
 		t.Fatalf("unable to create AlloyDB connection pool: %s", err)
 	}

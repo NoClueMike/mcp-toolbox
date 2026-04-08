@@ -35,7 +35,7 @@ func TestAlloyDBPgToolEndpoints(t *testing.T) {
 
 	args := []string{"--enable-api"}
 
-	pool, err := initAlloyDBPgConnectionPool(AlloyDBPostgresProject, AlloyDBPostgresRegion, AlloyDBPostgresCluster, AlloyDBPostgresInstance, "public", AlloyDBPostgresUser, AlloyDBPostgresPass, AlloyDBPostgresDatabase)
+	pool, err := initAlloyDBPgConnectionPool(ctx, AlloyDBPostgresProject, AlloyDBPostgresRegion, AlloyDBPostgresCluster, AlloyDBPostgresInstance, "public", AlloyDBPostgresUser, AlloyDBPostgresPass, AlloyDBPostgresDatabase)
 	if err != nil {
 		t.Fatalf("unable to create AlloyDB connection pool: %s", err)
 	}
