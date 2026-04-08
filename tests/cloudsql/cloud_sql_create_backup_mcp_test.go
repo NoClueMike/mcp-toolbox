@@ -91,11 +91,11 @@ func TestCreateBackupToolMCP(t *testing.T) {
 			want:     `{"name":"op1","status":"PENDING"}`,
 		},
 		{
-			name:      "missing instance name",
-			toolName:  "create-backup",
-			args:      map[string]any{"project": "p1", "escription": "invalid"},
+			name:        "missing instance name",
+			toolName:    "create-backup",
+			args:        map[string]any{"project": "p1", "escription": "invalid"},
 			expectError: true,
-			wantError: `parameter "instance" is required`,
+			wantError:   `parameter "instance" is required`,
 		},
 	}
 

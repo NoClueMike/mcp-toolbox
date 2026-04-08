@@ -91,11 +91,11 @@ func TestCreateUsersToolMCP(t *testing.T) {
 			want:     `{"name":"op2","status":"PENDING"}`,
 		},
 		{
-			name:      "missing password for built-in user",
-			toolName:  "create-user",
-			args:      map[string]any{"project": "p1", "instance": "i1", "name": "test-user", "iamUser": false},
+			name:        "missing password for built-in user",
+			toolName:    "create-user",
+			args:        map[string]any{"project": "p1", "instance": "i1", "name": "test-user", "iamUser": false},
 			expectError: true,
-			wantError: `missing 'password' parameter for non-IAM user`,
+			wantError:   `missing 'password' parameter for non-IAM user`,
 		},
 	}
 

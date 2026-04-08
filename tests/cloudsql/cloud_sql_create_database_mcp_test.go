@@ -85,11 +85,11 @@ func TestCreateDatabaseToolMCP(t *testing.T) {
 			want:     `{"name":"op1","status":"PENDING"}`,
 		},
 		{
-			name:      "missing name",
-			toolName:  "create-database",
-			args:      map[string]any{"project": "p1", "instance": "i1"},
+			name:        "missing name",
+			toolName:    "create-database",
+			args:        map[string]any{"project": "p1", "instance": "i1"},
 			expectError: true,
-			wantError: `parameter "name" is required`,
+			wantError:   `parameter "name" is required`,
 		},
 	}
 

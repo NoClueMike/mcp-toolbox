@@ -91,11 +91,11 @@ func TestCloneInstanceToolMCP(t *testing.T) {
 			want:     `{"name":"op2","status":"PENDING"}`,
 		},
 		{
-			name:      "missing destination instance name",
-			toolName:  "clone-instance",
-			args:      map[string]any{"project": "p1", "sourceInstanceName": "source-instance"},
+			name:        "missing destination instance name",
+			toolName:    "clone-instance",
+			args:        map[string]any{"project": "p1", "sourceInstanceName": "source-instance"},
 			expectError: true,
-			wantError: `parameter "destinationInstanceName" is required`,
+			wantError:   `parameter "destinationInstanceName" is required`,
 		},
 	}
 

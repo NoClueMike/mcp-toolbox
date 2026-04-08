@@ -167,9 +167,14 @@ func TestCloudSQLWaitToolMCP(t *testing.T) {
 				return
 			}
 
-			var gotMap, wantMap map[string]any
-			if err := json.Unmarshal([]byte(got), &gotMap); err != nil {
-				t.Fatalf("failed to unmarshal result: %v\nraw: %s", err, got)
+			var tempString string
+			if err := json.Unmarshal([]byte(got), &tempString); err != nil {
+				t.Fatalf("failed to unmarshal outer JSON string: %v\nraw: %s", err, got)
+			}
+
+			var gotMap map[string]any
+			if err := json.Unmarshal([]byte(tempString), &gotMap); err != nil {
+				t.Fatalf("failed to unmarshal inner JSON object: %v\ntemp: %s", err, tempString)
 			}
 			if err := json.Unmarshal([]byte(tc.want), &wantMap); err != nil {
 				t.Fatalf("failed to unmarshal want: %v", err)

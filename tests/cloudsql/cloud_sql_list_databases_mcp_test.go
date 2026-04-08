@@ -85,11 +85,11 @@ func TestListDatabasesToolMCP(t *testing.T) {
 			want:     `[{"name":"db1","charset":"utf8","collation":"utf8_general_ci"},{"name":"db2","charset":"utf8mb4","collation":"utf8mb4_unicode_ci"}]`,
 		},
 		{
-			name:      "missing instance",
-			toolName:  "list-databases",
-			args:      map[string]any{"project": "p1"},
+			name:        "missing instance",
+			toolName:    "list-databases",
+			args:        map[string]any{"project": "p1"},
 			expectError: true,
-			wantError: `parameter "instance" is required`,
+			wantError:   `parameter "instance" is required`,
 		},
 	}
 

@@ -107,15 +107,22 @@ func TestListInstanceMCP(t *testing.T) {
 			if err != nil {
 				t.Fatalf("native error executing %s: %s", tc.toolName, err)
 			}
-			if statusCode != http.StatusOK {
-				t.Fatalf("expected status 200, got %d", statusCode)
-			}
 
 			if tc.expectError {
-				if mcpResp.Error == nil && !mcpResp.Result.IsError {
-					t.Fatal("expected error result but got success")
+				if statusCode != http.StatusOK {
+					// Expected failure at HTTP level (e.g. 401)
+					return
 				}
+				if mcpResp.Error != nil || mcpResp.Result.IsError {
+					// Expected failure at MCP level
+					return
+				}
+				t.Fatal("expected error result but got success")
 				return
+			}
+
+			if statusCode != http.StatusOK {
+				t.Fatalf("expected status 200, got %d", statusCode)
 			}
 
 			if mcpResp.Result.IsError {
