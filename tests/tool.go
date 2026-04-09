@@ -3910,75 +3910,78 @@ func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string, 
 
 	invokeTcs := []struct {
 		name           string
-		api            string
-		requestBody    string
+		toolName       string
+		args           map[string]any
 		wantStatusCode int
 		want           string
+		wantMCPError   string
 		isAllTables    bool
 		isAgentErr     bool
 	}{
 		{
 			name:           "invoke list_tables for all tables detailed output",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": ""}`,
+			toolName:       "list_tables",
+			args:           map[string]any{"table_names": ""},
 			wantStatusCode: http.StatusOK,
 			want:           fmt.Sprintf("[%s,%s]", getDetailedWant(tableNameAuth, authTableColumns), getDetailedWant(tableNameParam, paramTableColumns)),
 			isAllTables:    true,
 		},
 		{
 			name:           "invoke list_tables for all tables simple output",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": "", "output_format": "simple"}`,
+			toolName:       "list_tables",
+			args:           map[string]any{"table_names": "", "output_format": "simple"},
 			wantStatusCode: http.StatusOK,
 			want:           fmt.Sprintf("[%s,%s]", getSimpleWant(tableNameAuth), getSimpleWant(tableNameParam)),
 			isAllTables:    true,
 		},
 		{
 			name:           "invoke list_tables detailed output",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    fmt.Sprintf(`{"table_names": "%s"}`, tableNameAuth),
+			toolName:       "list_tables",
+			args:           map[string]any{"table_names": tableNameAuth},
 			wantStatusCode: http.StatusOK,
 			want:           fmt.Sprintf("[%s]", getDetailedWant(tableNameAuth, authTableColumns)),
 		},
 		{
 			name:           "invoke list_tables simple output",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    fmt.Sprintf(`{"table_names": "%s", "output_format": "simple"}`, tableNameAuth),
+			toolName:       "list_tables",
+			args:           map[string]any{"table_names": tableNameAuth, "output_format": "simple"},
 			wantStatusCode: http.StatusOK,
 			want:           fmt.Sprintf("[%s]", getSimpleWant(tableNameAuth)),
 		},
 		{
 			name:           "invoke list_tables with invalid output format",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": "", "output_format": "abcd"}`,
+			toolName:       "list_tables",
+			args:           map[string]any{"table_names": "", "output_format": "abcd"},
 			wantStatusCode: http.StatusOK,
 			isAgentErr:     true,
+			wantMCPError:   "invalid value for output_format: must be 'simple' or 'detailed'",
 		},
 		{
 			name:           "invoke list_tables with malformed table_names parameter",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": 12345, "output_format": "detailed"}`,
+			toolName:       "list_tables",
+			args:           map[string]any{"table_names": 12345, "output_format": "detailed"},
 			wantStatusCode: http.StatusOK,
 			isAgentErr:     true,
+			wantMCPError:   "not type \"string\"",
 		},
 		{
 			name:           "invoke list_tables with multiple table names",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    fmt.Sprintf(`{"table_names": "%s,%s"}`, tableNameParam, tableNameAuth),
+			toolName:       "list_tables",
+			args:           map[string]any{"table_names": fmt.Sprintf("%s,%s", tableNameParam, tableNameAuth)},
 			wantStatusCode: http.StatusOK,
 			want:           fmt.Sprintf("[%s,%s]", getDetailedWant(tableNameAuth, authTableColumns), getDetailedWant(tableNameParam, paramTableColumns)),
 		},
 		{
 			name:           "invoke list_tables with non-existent table",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    `{"table_names": "non_existent_table"}`,
+			toolName:       "list_tables",
+			args:           map[string]any{"table_names": "non_existent_table"},
 			wantStatusCode: http.StatusOK,
 			want:           `[]`,
 		},
 		{
 			name:           "invoke list_tables with one existing and one non-existent table",
-			api:            "http://127.0.0.1:5000/api/tool/list_tables/invoke",
-			requestBody:    fmt.Sprintf(`{"table_names": "%s,non_existent_table"}`, tableNameParam),
+			toolName:       "list_tables",
+			args:           map[string]any{"table_names": fmt.Sprintf("%s,non_existent_table", tableNameParam)},
 			wantStatusCode: http.StatusOK,
 			want:           fmt.Sprintf("[%s]", getDetailedWant(tableNameParam, paramTableColumns)),
 		},
@@ -3989,15 +3992,7 @@ func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string, 
 			var resultString string
 
 			if config.IsMCP {
-				var args map[string]any
-				if len(tc.requestBody) > 0 {
-					_ = json.Unmarshal([]byte(tc.requestBody), &args)
-				}
-				if args == nil {
-					args = make(map[string]any)
-				}
-
-				statusCode, mcpResp, err := InvokeMCPTool(t, "list_tables", args, nil)
+				statusCode, mcpResp, err := InvokeMCPTool(t, tc.toolName, tc.args, nil)
 
 				if statusCode != tc.wantStatusCode {
 					t.Fatalf("wrong status code: got %d, want %d, err: %v", statusCode, tc.wantStatusCode, err)
@@ -4009,6 +4004,25 @@ func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string, 
 				if tc.isAgentErr {
 					if mcpResp == nil || (!mcpResp.Result.IsError && mcpResp.Error == nil) {
 						t.Fatalf("expected error result in MCP, but got success")
+					}
+					
+					if tc.wantMCPError != "" {
+						errStr := ""
+						if mcpResp.Error != nil {
+							errStr = mcpResp.Error.Message
+						} else if mcpResp.Result.IsError {
+							var blocks []string
+							for _, content := range mcpResp.Result.Content {
+								if content.Type == "text" {
+									blocks = append(blocks, content.Text)
+								}
+							}
+							errStr = strings.Join(blocks, " ")
+						}
+						
+						if !strings.Contains(errStr, tc.wantMCPError) {
+							t.Fatalf("MCP error message does not contain expected substring. Got: %q, Want: %q", errStr, tc.wantMCPError)
+						}
 					}
 					return
 				}
@@ -4027,7 +4041,12 @@ func RunMSSQLListTablesTest(t *testing.T, tableNameParam, tableNameAuth string, 
 					resultString = "[" + strings.Join(blocks, ",") + "]"
 				}
 			} else {
-				resp, respBytes := RunRequest(t, http.MethodPost, tc.api, bytes.NewBuffer([]byte(tc.requestBody)), nil)
+				apiURL := fmt.Sprintf("http://127.0.0.1:5000/api/tool/%s/invoke", tc.toolName)
+				reqBytes, err := json.Marshal(tc.args)
+				if err != nil {
+					t.Fatalf("failed to marshal args: %v", err)
+				}
+				resp, respBytes := RunRequest(t, http.MethodPost, apiURL, bytes.NewBuffer(reqBytes), nil)
 
 				if resp.StatusCode != tc.wantStatusCode {
 					t.Fatalf("response status code is not %d, got %d: %s", tc.wantStatusCode, resp.StatusCode, string(respBytes))
