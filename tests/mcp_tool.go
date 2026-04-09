@@ -41,8 +41,17 @@ import (
 )
 
 // RunRequest is a helper function to send HTTP requests and return the response
-func RunRequest(t *testing.T, method, url string, body io.Reader, headers map[string]string) (*http.Response, []byte) {
-	req, err := http.NewRequest(method, url, body)
+// TODO: In Go, context should normally be the first parameter (after *testing.T).
+// We put it at the end as a variadic argument here to make it optional and avoid
+// breaking legacy tests that don't pass it. Consider refactoring this to the first
+// parameter when legacy tests are removed.
+func RunRequest(t *testing.T, method, url string, body io.Reader, headers map[string]string, ctx ...context.Context) (*http.Response, []byte) {
+	rCtx := context.Background()
+	if len(ctx) > 0 && ctx[0] != nil {
+		rCtx = ctx[0]
+	}
+
+	req, err := http.NewRequestWithContext(rCtx, method, url, body)
 	if err != nil {
 		t.Fatalf("unable to create request: %s", err)
 	}
@@ -124,7 +133,7 @@ func NewMCPRequestHeader(t *testing.T, customHeaders map[string]string) map[stri
 }
 
 // InvokeMCPTool is a transparent, native JSON-RPC execution harness for tests.
-func InvokeMCPTool(t *testing.T, toolName string, arguments map[string]any, requestHeader map[string]string) (int, *MCPCallToolResponse, error) {
+func InvokeMCPTool(t *testing.T, toolName string, arguments map[string]any, requestHeader map[string]string, ctx ...context.Context) (int, *MCPCallToolResponse, error) {
 	headers := NewMCPRequestHeader(t, requestHeader)
 
 	req := NewMCPCallToolRequest(uuid.New().String(), toolName, arguments)
@@ -132,8 +141,9 @@ func InvokeMCPTool(t *testing.T, toolName string, arguments map[string]any, requ
 	if err != nil {
 		t.Fatalf("error marshalling request body: %v", err)
 	}
-
-	resp, respBody := RunRequest(t, http.MethodPost, "http://127.0.0.1:5000/mcp", bytes.NewBuffer(reqBody), headers)
+	// TODO: We are using variadic ctx here to avoid breaking existing callers.
+	// Once all tests are updated to pass context, make it a regular first argument.
+	resp, respBody := RunRequest(t, http.MethodPost, "http://127.0.0.1:5000/mcp", bytes.NewBuffer(reqBody), headers, ctx...)
 
 	var mcpResp MCPCallToolResponse
 	if err := json.Unmarshal(respBody, &mcpResp); err != nil {
@@ -2244,7 +2254,7 @@ func RunMCPPostgresListRolesTest(t *testing.T, ctx context.Context, pool *pgxpoo
 }
 
 // RunMCPStatementToolsTest tests statement tools via MCP.
-func RunMCPStatementToolsTest(t *testing.T, tools map[string]string) {
+func RunMCPStatementToolsTest(t *testing.T, ctx context.Context, tools map[string]string) {
 	for toolName, paramBody := range tools {
 		t.Run(toolName, func(t *testing.T) {
 			var args map[string]any
@@ -2253,7 +2263,7 @@ func RunMCPStatementToolsTest(t *testing.T, tools map[string]string) {
 					t.Fatalf("failed to unmarshal paramBody: %v", err)
 				}
 			}
-			statusCode, mcpResp, err := InvokeMCPTool(t, toolName, args, nil)
+			statusCode, mcpResp, err := InvokeMCPTool(t, toolName, args, nil, ctx)
 			if err != nil {
 				t.Fatalf("native error executing %s: %s", toolName, err)
 			}

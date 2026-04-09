@@ -209,5 +209,5 @@ func TestAlloyDBPgCallTool(t *testing.T) {
 		"list_invalid_indexes":           `{}`,
 		"get_query_plan":                 `{"query": "SELECT 1"}`,
 	}
-	tests.RunMCPStatementToolsTest(t, toolsToTest)
+	tests.RunMCPStatementToolsTest(t, ctx, toolsToTest)
 }
