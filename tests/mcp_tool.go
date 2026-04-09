@@ -143,24 +143,34 @@ func InvokeMCPTool(t *testing.T, toolName string, arguments map[string]any, requ
 	return resp.StatusCode, &mcpResp, nil
 }
 
-// getMCPResultText safely extracts the text from content blocks, reconstructing an array if there are multiple items.
-func getMCPResultText(resp *MCPCallToolResponse) string {
+// getMCPResultText safely extracts the text from content blocks, reconstructing a valid JSON array if there are multiple items.
+//
+// TODO: This helper and unmarshalMCPResult rely on extracting text content.
+// For tests that need to strictly validate the exact schema or structure of the output,
+// consider avoiding these helpers and instead unmarshal the raw JSON directly into expected Go structs for comparison.
+func getMCPResultText(t *testing.T, resp *MCPCallToolResponse) string {
 	if len(resp.Result.Content) == 0 {
 		return "[]"
 	}
 	if len(resp.Result.Content) == 1 {
 		return resp.Result.Content[0].Text
 	}
-	var builder strings.Builder
-	builder.WriteString("[")
-	for i, content := range resp.Result.Content {
-		if i > 0 {
-			builder.WriteString(",")
+
+	var combined []any
+	for _, content := range resp.Result.Content {
+		var item any
+		if err := json.Unmarshal([]byte(content.Text), &item); err != nil {
+			combined = append(combined, content.Text)
+		} else {
+			combined = append(combined, item)
 		}
-		builder.WriteString(content.Text)
 	}
-	builder.WriteString("]")
-	return builder.String()
+
+	respBytes, err := json.Marshal(combined)
+	if err != nil {
+		t.Fatalf("failed to marshal combined result: %v", err)
+	}
+	return string(respBytes)
 }
 
 // unmarshalMCPResult unmarshals a JSON string into a slice of Ts.
@@ -291,7 +301,7 @@ func RunMCPCustomToolCallMethod(t *testing.T, toolName string, arguments map[str
 	if mcpResp.Result.IsError {
 		t.Fatalf("%s returned error result: %v", toolName, mcpResp.Result)
 	}
-	got := getMCPResultText(mcpResp)
+	got := getMCPResultText(t, mcpResp)
 	if !strings.Contains(got, want) {
 		t.Fatalf(`expected %q to contain %q`, got, want)
 	}
@@ -389,7 +399,7 @@ func RunMCPToolInvokeTest(t *testing.T, select1Want string, options ...InvokeTes
 			if mcpResp.Result.IsError {
 				t.Fatalf("%s returned error result: %v", tc.toolName, mcpResp.Result)
 			}
-			got := getMCPResultText(mcpResp)
+			got := getMCPResultText(t, mcpResp)
 			if !strings.Contains(got, tc.wantResult) {
 				t.Fatalf(`expected %q to contain %q`, got, tc.wantResult)
 			}
@@ -475,7 +485,7 @@ func RunMCPPostgresListViewsTest(t *testing.T, ctx context.Context, pool *pgxpoo
 				t.Fatalf("list_views returned error result: %v", mcpResp.Result)
 			}
 
-			got := getMCPResultText(mcpResp)
+			got := getMCPResultText(t, mcpResp)
 			gotObj, err := unmarshalMCPResult[map[string]any](got)
 			if err != nil {
 				t.Fatalf("failed to unmarshal nested result string: %v", err)
@@ -560,7 +570,7 @@ func RunMCPPostgresListSchemasTest(t *testing.T, ctx context.Context, pool *pgxp
 				t.Fatalf("list_schemas returned error result: %v", mcpResp.Result)
 			}
 			gotObj := []map[string]any{}
-			got := getMCPResultText(mcpResp)
+			got := getMCPResultText(t, mcpResp)
 			if got != "null" {
 				gotObj, err = unmarshalMCPResult[map[string]any](got)
 				if err != nil {
@@ -674,7 +684,7 @@ func RunMCPPostgresListActiveQueriesTest(t *testing.T, ctx context.Context, pool
 				t.Fatalf("list_active_queries returned error result: %v", mcpResp.Result)
 			}
 			var details []queryListDetails
-			got := getMCPResultText(mcpResp)
+			got := getMCPResultText(t, mcpResp)
 			if got != "null" {
 				details, err = unmarshalMCPResult[queryListDetails](got)
 				if err != nil {
@@ -973,7 +983,7 @@ func RunMCPPostgresListSequencesTest(t *testing.T, ctx context.Context, pool *pg
 				t.Fatalf("list_sequences returned error result: %v", mcpResp.Result)
 			}
 			gotObj := []map[string]any{}
-			got := getMCPResultText(mcpResp)
+			got := getMCPResultText(t, mcpResp)
 			if got != "null" {
 				gotObj, err = unmarshalMCPResult[map[string]any](got)
 				if err != nil {
@@ -1301,7 +1311,7 @@ func RunMCPPostgresListStoredProcedureTest(t *testing.T, ctx context.Context, po
 				t.Fatalf("list_stored_procedure returned error result: %v", mcpResp.Result)
 			}
 			var gotObj []storedProcedureDetails
-			got := getMCPResultText(mcpResp)
+			got := getMCPResultText(t, mcpResp)
 			if got != "null" {
 				gotObj, err = unmarshalMCPResult[storedProcedureDetails](got)
 				if err != nil {
