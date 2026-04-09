@@ -227,7 +227,7 @@ func TestAlloyDBAINLCallTool(t *testing.T) {
 				if mcpResp.Result.IsError {
 					t.Fatalf("expected success result, got tool error: %v", mcpResp.Result)
 				}
-				got := tests.GetMCPResultText(mcpResp)
+				got := tests.GetMCPResultText(t, mcpResp)
 				var gotStr string
 				if len(got) == 1 {
 					gotBytes, _ := json.Marshal(got[0])
