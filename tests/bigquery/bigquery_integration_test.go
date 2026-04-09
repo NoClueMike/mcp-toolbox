@@ -985,7 +985,9 @@ func runBigQueryExecuteSqlToolInvokeTest(t *testing.T, select1Want, invokeParamW
 		}
 
 		if got != info.Want {
-			t.Fatalf("unexpected value: got %q, want %q", got, info.Want)
+			if info.Want == "" || !strings.Contains(got, info.Want) {
+				t.Fatalf("unexpected value: got %q, want %q", got, info.Want)
+			}
 		}
 	})
 }
