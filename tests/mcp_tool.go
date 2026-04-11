@@ -1600,7 +1600,6 @@ func RunMCPPostgresListIndexesTest(t *testing.T, ctx context.Context, pool *pgxp
 	}
 	for _, tc := range invokeTcs {
 		t.Run(tc.name, func(t *testing.T) {
-
 			statusCode, mcpResp, err := InvokeMCPTool(t, ctx, "list_indexes", tc.args, nil)
 			if err != nil {
 				t.Fatalf("native error executing list_indexes: %s", err)
