@@ -32,7 +32,9 @@ import (
 	"github.com/fsnotify/fsnotify"
 	// Importing the cmd/internal package also import packages for side effect of registration
 	"github.com/googleapis/genai-toolbox/cmd/internal"
+	"github.com/googleapis/genai-toolbox/cmd/internal/describetool"
 	"github.com/googleapis/genai-toolbox/cmd/internal/invoke"
+	"github.com/googleapis/genai-toolbox/cmd/internal/listtools"
 	"github.com/googleapis/genai-toolbox/cmd/internal/migrate"
 	"github.com/googleapis/genai-toolbox/cmd/internal/serve"
 	"github.com/googleapis/genai-toolbox/cmd/internal/skills"
@@ -127,6 +129,8 @@ func NewCommand(opts *internal.ToolboxOptions) *cobra.Command {
 	cmd.AddCommand(skills.NewCommand(opts))
 	cmd.AddCommand(serve.NewCommand(opts))
 	cmd.AddCommand(migrate.NewCommand(opts))
+	cmd.AddCommand(listtools.NewCommand(opts))
+	cmd.AddCommand(describetool.NewCommand(opts))
 
 	return cmd
 }
