@@ -316,7 +316,7 @@ func RunMCPToolInvokeTest(t *testing.T, ctx context.Context, select1Want string,
 		myToolId3NameAliceWant:   "[{\"id\":1,\"name\":\"Alice\"},{\"id\":3,\"name\":\"Sid\"}]",
 		myToolById4Want:          "[{\"id\":4,\"name\":null}]",
 		myArrayToolWant:          "[{\"id\":1,\"name\":\"Alice\"},{\"id\":3,\"name\":\"Sid\"}]",
-		nullWant:                 "null",
+		nullWant:                 "[]",
 		supportOptionalNullParam: true,
 		supportArrayParam:        true,
 		supportClientAuth:        false,
@@ -415,9 +415,9 @@ func RunMCPToolInvokeTest(t *testing.T, ctx context.Context, select1Want string,
 func RunMCPExecuteSqlToolInvokeTest(t *testing.T, ctx context.Context, createTableStatement, select1Want string, options ...ExecuteSqlOption) {
 	configs := &ExecuteSqlTestConfig{
 		select1Statement: `"SELECT 1"`,
-		createWant:       "null",
-		dropWant:         "null",
-		selectEmptyWant:  "null",
+		createWant:       "[]",
+		dropWant:         "[]",
+		selectEmptyWant:  "[]",
 	}
 
 	for _, option := range options {
@@ -548,12 +548,12 @@ func RunMCPExecuteSqlToolInvokeTest(t *testing.T, ctx context.Context, createTab
 // RunMCPToolInvokeWithTemplateParameters runs tool invoke test cases with template parameters via MCP.
 func RunMCPToolInvokeWithTemplateParameters(t *testing.T, ctx context.Context, tableName string, options ...TemplateParamOption) {
 	configs := &TemplateParameterTestConfig{
-		ddlWant:         "null",
+		ddlWant:         "[]",
 		selectAllWant:   "[{\"age\":21,\"id\":1,\"name\":\"Alex\"},{\"age\":100,\"id\":2,\"name\":\"Alice\"}]",
 		selectId1Want:   "[{\"age\":21,\"id\":1,\"name\":\"Alex\"}]",
 		selectNameWant:  "[{\"age\":21,\"id\":1,\"name\":\"Alex\"}]",
-		selectEmptyWant: "null",
-		insert1Want:     "null",
+		selectEmptyWant: "[]",
+		insert1Want:     "[]",
 
 		nameFieldArray: `["name"]`,
 		nameColFilter:  "name",
