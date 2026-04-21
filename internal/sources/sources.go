@@ -104,5 +104,5 @@ func (s MetadataSource) Query(ctx context.Context, sql string, args ...any) (any
 }
 
 func (s MetadataSource) RunSQL(ctx context.Context, statement string, params []any) (any, error) {
-	return nil, nil
+	return nil, fmt.Errorf("source is in metadata-only mode; execution is not supported")
 }
