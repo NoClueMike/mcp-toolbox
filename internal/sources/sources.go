@@ -99,8 +99,8 @@ func (s MetadataSource) GetAuthTokenHeaderName() string {
 	return "Authorization"
 }
 
-func (s MetadataSource) Query(ctx context.Context, sql string, args ...interface{}) (any, error) {
-	return nil, nil
+func (s MetadataSource) Query(ctx context.Context, sql string, args ...any) (any, error) {
+	return nil, fmt.Errorf("source is in metadata-only mode; execution is not supported")
 }
 
 func (s MetadataSource) RunSQL(ctx context.Context, statement string, params []any) (any, error) {
