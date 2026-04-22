@@ -120,3 +120,51 @@ func TestGetMcpManifestMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestCloneAndFilter(t *testing.T) {
+	manifest := tools.McpManifest{
+		Name:        "test-tool",
+		Description: "test tool description",
+		InputSchema: parameters.McpToolsSchema{
+			Type: "object",
+			Properties: map[string]parameters.ParameterMcpManifest{
+				"param1": {Type: "string", Description: "param1 desc"},
+				"param2": {Type: "string", Description: "param2 desc"},
+				"param3": {Type: "string", Description: "param3 desc"},
+			},
+			Required: []string{"param1", "param2"},
+		},
+	}
+
+	params := map[string]string{
+		"param2": "value2",
+		"param4": "value4",
+	}
+
+	cloned := manifest.CloneAndFilter(params)
+
+	// Verify properties removed
+	if _, exists := cloned.InputSchema.Properties["param2"]; exists {
+		t.Errorf("param2 should have been removed from properties")
+	}
+	if _, exists := cloned.InputSchema.Properties["param1"]; !exists {
+		t.Errorf("param1 should not have been removed from properties")
+	}
+	if _, exists := cloned.InputSchema.Properties["param3"]; !exists {
+		t.Errorf("param3 should not have been removed from properties")
+	}
+
+	// Verify required removed
+	expectedRequired := []string{"param1"}
+	if diff := cmp.Diff(expectedRequired, cloned.InputSchema.Required); diff != "" {
+		t.Errorf("unexpected required list (-want +got):\n%s", diff)
+	}
+
+	// Verify original not modified
+	if _, exists := manifest.InputSchema.Properties["param2"]; !exists {
+		t.Errorf("original manifest should not have been modified (param2 missing)")
+	}
+	if len(manifest.InputSchema.Required) != 2 {
+		t.Errorf("original manifest required list should not have been modified")
+	}
+}

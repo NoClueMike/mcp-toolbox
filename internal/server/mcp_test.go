@@ -421,7 +421,7 @@ func runInitializeLifecycle(t *testing.T, ts *httptest.Server, protocolVersion s
 }
 
 func TestMcpEndpoint(t *testing.T) {
-	mockTools := []MockTool{tool1, tool2, tool3, tool4, tool5}
+	mockTools := []MockTool{tool1, tool2, tool3, tool4, tool5, tool6}
 	mockPrompts := []MockPrompt{prompt1, prompt2}
 	toolsMap, toolsets, promptsMap, promptsets := setUpResources(t, mockTools, mockPrompts)
 	r, shutdown := setUpServer(t, "mcp", toolsMap, toolsets, promptsMap, promptsets)
@@ -588,6 +588,100 @@ func TestMcpEndpoint(t *testing.T) {
 								map[string]any{
 									"name":        "require_client_auth_tool",
 									"inputSchema": basicInputSchema,
+								},
+								map[string]any{
+									"name":        "string_param_tool",
+									"inputSchema": map[string]any{
+										"type": "object",
+										"properties": map[string]any{
+											"param1": map[string]any{"type": "string", "description": "This is a string parameter."},
+										},
+										"required": []any{"param1"},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					name: "tools/list with URL param binding",
+					url:  "/?param2=value2",
+					body: jsonrpc.JSONRPCRequest{
+						Jsonrpc: jsonrpcVersion,
+						Id:      "tools-list-filtered",
+						Request: jsonrpc.Request{
+							Method: "tools/list",
+						},
+					},
+					wantStatusCode: http.StatusOK,
+					want: map[string]any{
+						"jsonrpc": "2.0",
+						"id":      "tools-list-filtered",
+						"result": map[string]any{
+							"tools": []any{
+								map[string]any{
+									"name":        "no_params",
+									"inputSchema": basicInputSchema,
+								},
+								map[string]any{
+									"name":        "some_params",
+									"inputSchema": map[string]any{
+										"type": "object",
+										"properties": map[string]any{
+											"param1": map[string]any{"type": "integer", "description": "This is the first parameter."},
+										},
+										"required": []any{"param1"},
+									},
+								},
+								map[string]any{
+									"name":        "array_param",
+									"description": "some description",
+									"inputSchema": tool3InputSchema,
+								},
+								map[string]any{
+									"name":        "unauthorized_tool",
+									"inputSchema": basicInputSchema,
+								},
+								map[string]any{
+									"name":        "require_client_auth_tool",
+									"inputSchema": basicInputSchema,
+								},
+								map[string]any{
+									"name":        "string_param_tool",
+									"inputSchema": map[string]any{
+										"type": "object",
+										"properties": map[string]any{
+											"param1": map[string]any{"type": "string", "description": "This is a string parameter."},
+										},
+										"required": []any{"param1"},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					name: "tools/call with URL param binding",
+					url:  "/?param1=injected_value",
+					body: jsonrpc.JSONRPCRequest{
+						Jsonrpc: jsonrpcVersion,
+						Id:      "tools-call-injected",
+						Request: jsonrpc.Request{
+							Method: "tools/call",
+						},
+						Params: map[string]any{
+							"name": "string_param_tool",
+						},
+					},
+					wantStatusCode: http.StatusOK,
+					want: map[string]any{
+						"jsonrpc": "2.0",
+						"id":      "tools-call-injected",
+						"result": map[string]any{
+							"content": []any{
+								map[string]any{
+									"type": "text",
+									"text": `"string_param_tool"`,
 								},
 							},
 						},

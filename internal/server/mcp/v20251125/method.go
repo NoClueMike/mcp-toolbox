@@ -166,6 +166,9 @@ func toolsCallHandler(ctx context.Context, id jsonrpc.RequestId, resourceMgr *re
 	// Auto-populate arguments from URL parameters
 	urlParams, ok := util.UrlParamsFromContext(ctx)
 	if ok {
+		if data == nil {
+			data = make(map[string]any)
+		}
 		for k, v := range urlParams {
 			data[k] = v
 		}

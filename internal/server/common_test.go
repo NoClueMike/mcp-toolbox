@@ -73,6 +73,13 @@ var tool5 = MockTool{
 	requiresClientAuthorization: true,
 }
 
+var tool6 = MockTool{
+	Name: "string_param_tool",
+	Params: parameters.Parameters{
+		parameters.NewStringParameter("param1", "This is a string parameter."),
+	},
+}
+
 var prompt1 = MockPrompt{
 	Name: "prompt1",
 	Args: prompts.Arguments{},
