@@ -32,7 +32,7 @@ func (m mockAuthServiceConfig) Initialize() (AuthService, error) {
 
 func TestMetadataAuthService(t *testing.T) {
 	mockCfg := mockAuthServiceConfig{}
-	svc := MetadataAuthService{Config: mockCfg}
+	svc := MetadataAuthService{Name: "test-auth", Config: mockCfg}
 
 	if svc.AuthServiceType() != "mock-auth-type" {
 		t.Errorf("expected AuthServiceType to be 'mock-auth-type', got %q", svc.AuthServiceType())
