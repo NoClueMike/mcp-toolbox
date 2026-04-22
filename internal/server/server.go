@@ -122,7 +122,7 @@ func InitializeConfigs(ctx context.Context, cfg ServerConfig) (
 	for name, sc := range cfg.AuthServiceConfigs {
 		a, err := func() (auth.AuthService, error) {
 			if cfg.MetadataOnly {
-				return auth.MetadataAuthService{Config: sc}, nil
+				return auth.MetadataAuthService{Name: name, Config: sc}, nil
 			}
 			_, span := instrumentation.Tracer.Start(
 				ctx,
