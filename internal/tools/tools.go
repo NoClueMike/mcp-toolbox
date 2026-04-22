@@ -174,6 +174,32 @@ func GetMcpManifest(name, desc string, authInvoke []string, params parameters.Pa
 	return mcpManifest
 }
 
+// CloneAndFilter returns a copy of the manifest with specified properties removed from the schema.
+func (m McpManifest) CloneAndFilter(params map[string]string) McpManifest {
+	// shallow copy
+	cloned := m
+	if m.InputSchema.Properties != nil {
+		// copy over property values
+		cloned.InputSchema.Properties = make(map[string]parameters.ParameterMcpManifest, len(m.InputSchema.Properties))
+		for k, v := range m.InputSchema.Properties {
+			cloned.InputSchema.Properties[k] = v
+		}
+
+		cloned.InputSchema.Required = make([]string, len(m.InputSchema.Required))
+		copy(cloned.InputSchema.Required, m.InputSchema.Required)
+
+		for k := range params {
+			if _, exists := cloned.InputSchema.Properties[k]; exists {
+				delete(cloned.InputSchema.Properties, k)
+				cloned.InputSchema.Required = slices.DeleteFunc(cloned.InputSchema.Required, func(s string) bool {
+					return s == k
+				})
+			}
+		}
+	}
+	return cloned
+}
+
 // Helper function that returns if a tool invocation request is authorized
 func IsAuthorized(authRequiredSources []string, verifiedAuthServices []string) bool {
 	if len(authRequiredSources) == 0 {

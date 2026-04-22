@@ -428,7 +428,15 @@ func sseHandler(s *Server, w http.ResponseWriter, r *http.Request) {
 	if toolsetName != "" {
 		toolsetURL = fmt.Sprintf("/%s", toolsetName)
 	}
-	messageEndpoint := fmt.Sprintf("%s://%s/mcp%s?sessionId=%s", proto, r.Host, toolsetURL, sessionId)
+	// attach url query params to message endpoint
+	rawQuery := r.URL.RawQuery
+	var messageEndpoint string
+	if rawQuery != "" {
+		messageEndpoint = fmt.Sprintf("%s://%s/mcp%s?sessionId=%s&%s", proto, r.Host, toolsetURL, sessionId, rawQuery)
+	} else {
+		messageEndpoint = fmt.Sprintf("%s://%s/mcp%s?sessionId=%s", proto, r.Host, toolsetURL, sessionId)
+	}
+
 	s.logger.DebugContext(ctx, fmt.Sprintf("sending endpoint event: %s", messageEndpoint))
 	fmt.Fprintf(w, "event: endpoint\ndata: %s\n\n", messageEndpoint)
 	flusher.Flush()
@@ -463,6 +471,20 @@ func httpHandler(s *Server, w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	ctx = util.WithLogger(ctx, s.logger)
+
+	queryParams := r.URL.Query()
+	urlParams := make(map[string]string)
+	for k, v := range queryParams {
+		if k == "sessionId" {
+			continue
+		}
+		if len(v) > 0 {
+			urlParams[k] = v[0]
+		}
+	}
+	if len(urlParams) > 0 {
+		ctx = util.WithUrlParams(ctx, urlParams)
+	}
 
 	// Read body first so we can extract trace context
 	body, err := io.ReadAll(r.Body)
@@ -747,6 +769,7 @@ func processMcpMessage(ctx context.Context, body []byte, s *Server, protocolVers
 			span.SetAttributes(attribute.String("error.type", metricErrorType))
 			return "", rpcErr, err
 		}
+
 		result, err := mcp.ProcessMethod(ctx, protocolVersion, baseMessage.Id, baseMessage.Method, toolset, promptset, s.ResourceMgr, body, header)
 		if err != nil {
 			span.SetStatus(codes.Error, err.Error())

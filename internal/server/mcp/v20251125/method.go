@@ -40,7 +40,7 @@ func ProcessMethod(ctx context.Context, id jsonrpc.RequestId, method string, too
 	case PING:
 		return pingHandler(id)
 	case TOOLS_LIST:
-		return toolsListHandler(id, toolset, body)
+		return toolsListHandler(ctx, id, toolset, body)
 	case TOOLS_CALL:
 		return toolsCallHandler(ctx, id, resourceMgr, body, header)
 	case PROMPTS_LIST:
@@ -62,15 +62,21 @@ func pingHandler(id jsonrpc.RequestId) (any, error) {
 	}, nil
 }
 
-func toolsListHandler(id jsonrpc.RequestId, toolset tools.Toolset, body []byte) (any, error) {
+func toolsListHandler(ctx context.Context, id jsonrpc.RequestId, toolset tools.Toolset, body []byte) (any, error) {
 	var req ListToolsRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		err = fmt.Errorf("invalid mcp tools list request: %w", err)
 		return jsonrpc.NewError(id, jsonrpc.INVALID_REQUEST, err.Error(), nil), err
 	}
 
+	urlParams, _ := util.UrlParamsFromContext(ctx)
+	manifests := make([]tools.McpManifest, len(toolset.McpManifest))
+	for i, m := range toolset.McpManifest {
+		manifests[i] = m.CloneAndFilter(urlParams)
+	}
+
 	result := ListToolsResult{
-		Tools: toolset.McpManifest,
+		Tools: manifests,
 	}
 	return jsonrpc.JSONRPCResponse{
 		Jsonrpc: jsonrpc.JSONRPC_VERSION,
@@ -155,6 +161,14 @@ func toolsCallHandler(ctx context.Context, id jsonrpc.RequestId, resourceMgr *re
 	if err = util.DecodeJSON(bytes.NewBuffer(aMarshal), &data); err != nil {
 		err = fmt.Errorf("unable to decode tools argument: %w", err)
 		return jsonrpc.NewError(id, jsonrpc.INTERNAL_ERROR, err.Error(), nil), err
+	}
+
+	// Auto-populate arguments from URL parameters
+	urlParams, ok := util.UrlParamsFromContext(ctx)
+	if ok {
+		for k, v := range urlParams {
+			data[k] = v
+		}
 	}
 
 	// Tool authentication
