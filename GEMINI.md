@@ -155,7 +155,7 @@ Use the format: `Fixes #<issue_number> 🦕`
 1.  Create a new directory: `internal/sources/<newdb>`.
 2.  Define `Config` and `Source` structs in `internal/sources/<newdb>/<newdb>.go`.
 3.  Implement `SourceConfig` interface (`SourceConfigType`, `Initialize`).
-4.  Implement `Source` interface (`SourceType`).
+4.  Implement `Source` interface (`SourceType`, `ToConfig`).
 5.  Implement `init()` to register the source.
 6.  Add unit tests in `internal/sources/<newdb>/<newdb>_test.go`.
 
@@ -164,7 +164,7 @@ Use the format: `Fixes #<issue_number> 🦕`
 1.  Create a new directory: `internal/tools/<newdb>/<toolname>`.
 2.  Define `Config` and `Tool` structs.
 3.  Implement `ToolConfig` interface (`ToolConfigType`, `Initialize`).
-4.  Implement `Tool` interface (`Invoke`, `ParseParams`, `Manifest`, `McpManifest`, `Authorized`).
+4.  Implement `Tool` interface (defined in `internal/tools/tools.go`, including `Invoke`, `Manifest`, `Authorized`, etc.).
 5.  Implement `init()` to register the tool.
 6.  Add unit tests.
 
@@ -201,9 +201,8 @@ When generating or editing documentation for this repository, you must strictly 
 ##### Tool Page Constraints (`integrations/**/tools/*.md`)
 
 1.  **Location:** All native tools must reside inside a nested `tools/` subdirectory. The `tools/` directory must contain an `_index.md` file consisting **strictly of frontmatter**.
-2.  **Title Convention:** The YAML frontmatter `title` must always end with "Tool" (e.g., `title: "Execute SQL Tool"`).
-3.  **No H1 Tags:** Never generate H1 (`#`) headings in the markdown body.
-4.  **Strict H2 Ordering:** You must use the following H2 (`##`) headings in this exact sequence.
+2.  **No H1 Tags:** Never generate H1 (`#`) headings in the markdown body.
+3.  **Strict H2 Ordering:** You must use the following H2 (`##`) headings in this exact sequence.
     *   `## About` (Required)
     *   `## Compatible Sources` (Optional)
     *   `## Requirements` (Optional)
@@ -214,7 +213,8 @@ When generating or editing documentation for this repository, you must strictly 
     *   `## Advanced Usage` (Optional)
     *   `## Troubleshooting` (Optional)
     *   `## Additional Resources` (Optional)
-5.  **Shortcode Placement:** If you generate the `## Compatible Sources` section, you must include the `{{< compatible-sources >}}` shortcode beneath it.
+4.  **Shortcode Placement:** If you generate the `## Compatible Sources` section, you must include the `{{< compatible-sources >}}` shortcode beneath it.
+5.  **Title Convention:** The YAML frontmatter `title` must always be exactly the kebab-case name of the tool (e.g., `title: "arcadedb-execute-sql"`). Do **NOT** append the word "Tool" to the title (unlike source pages, which end with "Source").
 
 ##### Samples Architecture Constraints
 Sample code is aggregated visually in the UI via the Samples section, but the physical markdown files are distributed logically based on their scope.
@@ -224,10 +224,9 @@ Sample code is aggregated visually in the UI via the Samples section, but the ph
 
 ##### Samples Maintenance Rules
 
-1. **Filtering:** Always include `sample_filters` in the frontmatter. Use specific tags for:
-   * Data Source (e.g., `bigquery`, `alloydb`)
-   * Language (e.g., `python`, `js`, `go`)
-   * Tool Type (e.g., `mcp`, `sdk`)
+1. **Filtering (`sample_filters`):** Always include `sample_filters` in the frontmatter. You MUST use strict enums for filtering.
+   * **Source of Truth:** Always refer to `.hugo/data/filters.yaml` for the permitted list of Data Sources, Languages, Frameworks, and Categories.
+   * **Adding New Filters:** If your sample requires the addition of a new filter, add it to `.hugo/data/filters.yaml` using **Title Case** (capitalize the first letter of every word, with words separated by spaces). Do not use snake_case or lowercase.
 2. **Metadata:** Ensure `is_sample: true` is present to prevent the sample from being excluded from the Samples Gallery.
 
 ##### Prebuilt Config Constraints (`integrations/**/prebuilt-configs/*.md`)

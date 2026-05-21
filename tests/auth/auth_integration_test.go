@@ -15,6 +15,7 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -29,8 +30,9 @@ import (
 
 	"github.com/MicahParks/jwkset"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/googleapis/genai-toolbox/internal/testutils"
-	"github.com/googleapis/genai-toolbox/tests"
+	"github.com/googleapis/mcp-toolbox/internal/sources"
+	"github.com/googleapis/mcp-toolbox/internal/testutils"
+	"github.com/googleapis/mcp-toolbox/tests"
 )
 
 // TestMcpAuth test for MCP Authorization
@@ -65,12 +67,27 @@ func TestMcpAuth(t *testing.T) {
 			})
 			return
 		}
+		if r.URL.Path == "/introspect" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"active": true,
+				"scope":  "read:files execute:sql",
+				"aud":    "test-audience",
+				"exp":    time.Now().Add(time.Hour).Unix(),
+			})
+			return
+		}
 		http.NotFound(w, r)
 	}))
 	defer jwksServer.Close()
 
 	toolsFile := map[string]any{
-		"sources": map[string]any{},
+		"sources": map[string]any{
+			"my-sqlite": map[string]any{
+				"type":     "sqlite",
+				"database": ":memory:",
+			},
+		},
 		"authServices": map[string]any{
 			"my-generic-auth": map[string]any{
 				"type":                "generic",
@@ -80,9 +97,16 @@ func TestMcpAuth(t *testing.T) {
 				"mcpEnabled":          true,
 			},
 		},
-		"tools": map[string]any{},
+		"tools": map[string]any{
+			"my-tool": map[string]any{
+				"type":           "sqlite-execute-sql",
+				"source":         "my-sqlite",
+				"description":    "Execute SQL on SQLite",
+				"scopesRequired": []string{"execute:sql"},
+			},
+		},
 	}
-	args := []string{"--enable-api"}
+	args := []string{"--enable-api", "--toolbox-url=http://127.0.0.1:5000"}
 	cmd, cleanup, err := tests.StartCmd(ctx, toolsFile, args...)
 	if err != nil {
 		t.Fatalf("command initialization returned an error: %s", err)
@@ -97,75 +121,257 @@ func TestMcpAuth(t *testing.T) {
 		t.Fatalf("toolbox didn't start successfully: %s", err)
 	}
 
-	api := "http://127.0.0.1:5000/mcp/sse"
+	apiSSE := "http://127.0.0.1:5000/mcp/sse"
+	apiMCP := "http://127.0.0.1:5000/mcp"
 
-	t.Run("401 Unauthorized without token", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, api, nil)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("unable to send request: %s", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusUnauthorized {
-			t.Fatalf("expected 401, got %d", resp.StatusCode)
-		}
-		authHeader := resp.Header.Get("WWW-Authenticate")
-		if !strings.Contains(authHeader, `resource_metadata="/.well-known/oauth-protected-resource"`) || !strings.Contains(authHeader, `scope="read:files"`) {
-			t.Fatalf("expected WWW-Authenticate header to contain resource_metadata and scope, got: %s", authHeader)
-		}
+	// Generate invalid token (wrong scopes)
+	invalidToken := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"aud":   "test-audience",
+		"scope": "wrong:scope",
+		"sub":   "test-user",
+		"exp":   time.Now().Add(time.Hour).Unix(),
 	})
+	invalidToken.Header["kid"] = "test-key-id"
+	invalidSignedString, _ := invalidToken.SignedString(privateKey)
 
-	t.Run("403 Forbidden with insufficient scopes", func(t *testing.T) {
-		// Generate valid token but wrong scopes
-		token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-			"aud":   "test-audience",
-			"scope": "wrong:scope",
-			"sub":   "test-user",
-			"exp":   time.Now().Add(time.Hour).Unix(),
+	// Generate valid token
+	validToken := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"aud":   "test-audience",
+		"scope": "read:files",
+		"sub":   "test-user",
+		"exp":   time.Now().Add(time.Hour).Unix(),
+	})
+	validToken.Header["kid"] = "test-key-id"
+	validSignedString, _ := validToken.SignedString(privateKey)
+
+	// Generate token with only read:files scope
+	tokenOnlyRead := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"aud":   "test-audience",
+		"scope": "read:files",
+		"sub":   "test-user",
+		"exp":   time.Now().Add(time.Hour).Unix(),
+	})
+	tokenOnlyRead.Header["kid"] = "test-key-id"
+	tokenOnlyReadStr, _ := tokenOnlyRead.SignedString(privateKey)
+
+	// Generate token with BOTH scopes
+	tokenBoth := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"aud":   "test-audience",
+		"scope": "read:files execute:sql",
+		"sub":   "test-user",
+		"exp":   time.Now().Add(time.Hour).Unix(),
+	})
+	tokenBoth.Header["kid"] = "test-key-id"
+	tokenBothStr, _ := tokenBoth.SignedString(privateKey)
+
+	tests := []struct {
+		name           string
+		token          string
+		method         string
+		url            string
+		body           []byte
+		wantStatusCode int
+		checkWWWAuth   func(t *testing.T, authHeader string)
+	}{
+		{
+			name:           "401 Unauthorized without token",
+			token:          "",
+			wantStatusCode: http.StatusUnauthorized,
+			checkWWWAuth: func(t *testing.T, authHeader string) {
+				if !strings.Contains(authHeader, `resource_metadata="http://127.0.0.1:5000/.well-known/oauth-protected-resource"`) || !strings.Contains(authHeader, `scope="read:files"`) {
+					t.Fatalf("expected WWW-Authenticate header to contain resource_metadata and scope, got: %s", authHeader)
+				}
+			},
+		},
+		{
+			name:           "403 Forbidden with insufficient scopes",
+			token:          invalidSignedString,
+			wantStatusCode: http.StatusForbidden,
+			checkWWWAuth: func(t *testing.T, authHeader string) {
+				if !strings.Contains(authHeader, `resource_metadata="http://127.0.0.1:5000/.well-known/oauth-protected-resource"`) || !strings.Contains(authHeader, `scope="read:files"`) || !strings.Contains(authHeader, `error="insufficient_scope"`) {
+					t.Fatalf("expected WWW-Authenticate header to contain error, scope, and resource_metadata, got: %s", authHeader)
+				}
+			},
+		},
+		{
+			name:           "200 OK with valid token",
+			token:          validSignedString,
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:           "200 OK with valid opaque token",
+			token:          "this-is-an-opaque-token",
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:   "403 Forbidden with insufficient tool scopes",
+			token:  tokenOnlyReadStr,
+			method: http.MethodPost,
+			url:    apiMCP,
+			body: func() []byte {
+				b, _ := json.Marshal(map[string]any{
+					"jsonrpc": "2.0",
+					"id":      1,
+					"method":  "tools/call",
+					"params": map[string]any{
+						"name": "my-tool",
+						"arguments": map[string]any{
+							"sql": "SELECT 1;",
+						},
+					},
+				})
+				return b
+			}(),
+			wantStatusCode: http.StatusForbidden,
+			checkWWWAuth: func(t *testing.T, authHeader string) {
+				if !strings.Contains(authHeader, `error="insufficient_scope"`) || !strings.Contains(authHeader, `scope="execute:sql"`) {
+					t.Fatalf("expected WWW-Authenticate header to contain error and tool scope, got: %s", authHeader)
+				}
+			},
+		},
+		{
+			name:   "200 OK with sufficient tool scopes",
+			token:  tokenBothStr,
+			method: http.MethodPost,
+			url:    apiMCP,
+			body: func() []byte {
+				b, _ := json.Marshal(map[string]any{
+					"jsonrpc": "2.0",
+					"id":      1,
+					"method":  "tools/call",
+					"params": map[string]any{
+						"name": "my-tool",
+						"arguments": map[string]any{
+							"sql": "SELECT 1;",
+						},
+					},
+				})
+				return b
+			}(),
+			wantStatusCode: http.StatusOK,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			method := tc.method
+			if method == "" {
+				method = http.MethodGet
+			}
+			url := tc.url
+			if url == "" {
+				url = apiSSE
+			}
+			var body io.Reader
+			if tc.body != nil {
+				body = bytes.NewBuffer(tc.body)
+			}
+			req, _ := http.NewRequest(method, url, body)
+			if tc.token != "" {
+				req.Header.Add("Authorization", "Bearer "+tc.token)
+			}
+			if method == http.MethodPost {
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("MCP-Protocol-Version", "2025-11-25")
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("unable to send request: %s", err)
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tc.wantStatusCode {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				t.Fatalf("expected %d, got %d: %s", tc.wantStatusCode, resp.StatusCode, string(bodyBytes))
+			}
+
+			if tc.checkWWWAuth != nil {
+				authHeader := resp.Header.Get("WWW-Authenticate")
+				tc.checkWWWAuth(t, authHeader)
+			}
 		})
-		token.Header["kid"] = "test-key-id"
-		signedString, _ := token.SignedString(privateKey)
+	}
+}
 
-		req, _ := http.NewRequest(http.MethodGet, api, nil)
-		req.Header.Add("Authorization", "Bearer "+signedString)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("unable to send request: %s", err)
-		}
-		defer resp.Body.Close()
+// TestGoogleTokenValidation tests validation of Google access token
+func TestGoogleTokenValidation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 
-		if resp.StatusCode != http.StatusForbidden {
-			t.Fatalf("expected 403, got %d", resp.StatusCode)
-		}
-		authHeader := resp.Header.Get("WWW-Authenticate")
-		if !strings.Contains(authHeader, `resource_metadata="/.well-known/oauth-protected-resource"`) || !strings.Contains(authHeader, `scope="read:files"`) || !strings.Contains(authHeader, `error="insufficient_scope"`) {
-			t.Fatalf("expected WWW-Authenticate header to contain error, scope, and resource_metadata, got: %s", authHeader)
-		}
-	})
+	// Get access token
+	accessToken, err := sources.GetIAMAccessToken(ctx)
+	if err != nil {
+		t.Errorf("error getting access token from ADC: %s", err)
+	}
 
-	t.Run("200 OK with valid token", func(t *testing.T) {
-		// Generate valid token with correct scopes
-		token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-			"aud":   "test-audience",
-			"scope": "read:files",
-			"sub":   "test-user",
-			"exp":   time.Now().Add(time.Hour).Unix(),
-		})
-		token.Header["kid"] = "test-key-id"
-		signedString, _ := token.SignedString(privateKey)
+	// Call tokeninfo to get audience
+	resp, err := http.Get("https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=" + accessToken)
+	if err != nil {
+		t.Fatalf("failed to call tokeninfo: %v", err)
+	}
+	defer resp.Body.Close()
 
-		req, _ := http.NewRequest(http.MethodGet, api, nil)
-		req.Header.Add("Authorization", "Bearer "+signedString)
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatalf("unable to send request: %s", err)
-		}
-		defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("tokeninfo returned non-200 status %d: %s", resp.StatusCode, string(body))
+	}
 
-		if resp.StatusCode != http.StatusOK {
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, string(bodyBytes))
-		}
-	})
+	var tokenInfo struct {
+		Audience string `json:"audience"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenInfo); err != nil {
+		t.Fatalf("failed to decode tokeninfo response: %v", err)
+	}
+
+	aud := tokenInfo.Audience
+	if aud == "" {
+		t.Fatalf("audience is empty in tokeninfo response")
+	}
+
+	toolsFile := map[string]any{
+		"sources": map[string]any{},
+		"authServices": map[string]any{
+			"google-auth": map[string]any{
+				"type":                   "generic",
+				"audience":               aud,
+				"authorizationServer":    "https://accounts.google.com",
+				"introspectionEndpoint":  "https://www.googleapis.com/oauth2/v3/tokeninfo",
+				"introspectionMethod":    "GET",
+				"introspectionParamName": "access_token",
+				"mcpEnabled":             true,
+			},
+		},
+		"tools": map[string]any{},
+	}
+
+	args := []string{"--enable-api", "--toolbox-url=http://127.0.0.1:5005", "--port=5005"}
+	cmd, cleanup, err := tests.StartCmd(ctx, toolsFile, args...)
+	if err != nil {
+		t.Fatalf("command initialization returned an error: %s", err)
+	}
+	defer cleanup()
+
+	waitCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := testutils.WaitForString(waitCtx, regexp.MustCompile(`Server ready to serve`), cmd.Out)
+	if err != nil {
+		t.Logf("toolbox command logs: \n%s", out)
+		t.Fatalf("toolbox didn't start successfully: %s", err)
+	}
+
+	api := "http://127.0.0.1:5005/mcp/sse"
+
+	req, _ := http.NewRequest(http.MethodGet, api, nil)
+	req.Header.Add("Authorization", "Bearer "+accessToken)
+
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("unable to send request: %s", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, string(bodyBytes))
+	}
 }

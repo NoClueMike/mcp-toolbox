@@ -18,9 +18,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/googleapis/genai-toolbox/cmd/internal"
-	"github.com/googleapis/genai-toolbox/internal/server"
-	"github.com/googleapis/genai-toolbox/internal/server/resources"
+	"github.com/googleapis/mcp-toolbox/cmd/internal"
+	"github.com/googleapis/mcp-toolbox/internal/server"
+	"github.com/googleapis/mcp-toolbox/internal/server/resources"
 	"github.com/spf13/cobra"
 )
 

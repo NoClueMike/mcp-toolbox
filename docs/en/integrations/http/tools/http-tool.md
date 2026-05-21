@@ -217,6 +217,26 @@ will send the following output:
 }
 ```
 
+##### Path Escape
+
+The `pathEscape` keyword escapes strings so they can be safely placed inside a URL path segment, replacing special characters like slashes `/` with `%2F`.
+
+Example:
+
+```yaml
+path: /users/{{pathEscape .username}}/records
+```
+
+##### Query Escape
+
+The `queryEscape` keyword escapes strings to be safely placed inside a URL query string, encoding spaces into `+` and special characters into percent-encoded values.
+
+Example:
+
+```yaml
+path: /search?q={{queryEscape .query}}
+```
+
 ## Example
 
 ```yaml
@@ -266,8 +286,8 @@ headerParams:
 | method       |                 string                  |     true     | The HTTP method to use (e.g., GET, POST, PUT, DELETE).                                                                                                                                                                     |
 | headers      |            map[string]string            |    false     | A map of headers to include in the HTTP request (overrides source headers).                                                                                                                                                |
 | requestBody  |                 string                  |    false     | The request body payload. Use [go template][go-template-doc] with the parameter name as the placeholder (e.g., `{{.id}}` will be replaced with the value of the parameter that has name `id` in the `bodyParams` section). |
-| queryParams  | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the query string.                                                                                                                               |
-| bodyParams   | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be inserted into the request body payload.                                                                                                                       |
-| headerParams | [parameters](../#specifying-parameters) |    false     | List of [parameters](../#specifying-parameters) that will be inserted as the request headers.                                                                                                                              |
+| queryParams  | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the query string.                                                                                                                               |
+| bodyParams   | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted into the request body payload.                                                                                                                       |
+| headerParams | [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) |    false     | List of [parameters](../../../documentation/configuration/tools/_index.md#specifying-parameters) that will be inserted as the request headers.                                                                                                                              |
 
 [go-template-doc]: <https://pkg.go.dev/text/template#pkg-overview>
