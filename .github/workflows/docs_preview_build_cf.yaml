@@ -81,8 +81,10 @@ jobs:
           retention-days: 1
 
       - name: Deployment Link
+        env:
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
         run: |
-          DEPLOY_URL="https://github.com/${{ github.repository_owner }}/${{ github.event.repository.name }}/actions/workflows/docs_deploy_cf.yaml"
+          DEPLOY_URL="https://github.com/${{ github.repository_owner }}/$REPOSITORY_NAME/actions/workflows/docs_deploy_cf.yaml"
 
           echo "### Build Complete" >> $GITHUB_STEP_SUMMARY
           echo "The build for PR #${{ env.PR_NUMBER }} succeeded." >> $GITHUB_STEP_SUMMARY
